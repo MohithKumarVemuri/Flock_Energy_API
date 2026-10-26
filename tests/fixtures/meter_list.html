@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Urja Meter Ops - Meters</title>
+</head>
+<body>
+    <div class="header">
+        <h1>Meters Directory</h1>
+        <form class="search-form" method="GET" action="/meters">
+            <input type="text" name="q" value="" placeholder="Search meter ID or serial..." />
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <div class="table-container">
+        <table class="meters-table">
+            <thead>
+                <tr>
+                    <th>Meter</th>
+                    <th>Serial</th>
+                    <th>Make</th>
+                    <th>Phase</th>
+                    <th>Status</th>
+                    <th>DT</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><a href="/meters/J100000">J100000</a></td>
+                    <td>SE33962</td>
+                    <td>HPL</td>
+                    <td>single</td>
+                    <td><span class="badge status-decommissioned">Decommissioned</span></td>
+                    <td>DT-001</td>
+                </tr>
+                <tr>
+                    <td><a href="/meters/J100001">J100001</a></td>
+                    <td>SE10001</td>
+                    <td>Genus</td>
+                    <td>three</td>
+                    <td><span class="badge status-installed">Installed</span></td>
+                    <td>DT-001</td>
+                </tr>
+                <tr>
+                    <td><a href="/meters/J100002">J100002</a></td>
+                    <td>SE10002</td>
+                    <td>Secure</td>
+                    <td>single</td>
+                    <td><span class="badge status-installed">Installed</span></td>
+                    <td>DT-002</td>
+                </tr>
+                <tr>
+                    <td><a href="/meters/J100003">J100003</a></td>
+                    <td>SE10003</td>
+                    <td>Allied</td>
+                    <td>three</td>
+                    <td><span class="badge status-faulty">Faulty</span></td>
+                    <td>DT-002</td>
+                </tr>
+                <tr>
+                    <td><a href="/meters/J100004">J100004</a></td>
+                    <td>SE10004</td>
+                    <td>L&T</td>
+                    <td>single</td>
+                    <td><span class="badge status-installed">Installed</span></td>
+                    <td>DT-003</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination" data-page="1" data-total-pages="21" data-total="403">
+        <span class="pagination-info">Showing page 1 of 21 (403 total meters)</span>
+        <a class="page-link active" href="/meters?page=1">1</a>
+        <a class="page-link" href="/meters?page=2">2</a>
+        <a class="page-link" href="/meters?page=3">3</a>
+        <a class="page-link next" href="/meters?page=2">Next &raquo;</a>
+    </div>
+</body>
+</html>
