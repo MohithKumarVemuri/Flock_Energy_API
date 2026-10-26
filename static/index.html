@@ -778,13 +778,13 @@
         </div>
         <div class="metric-card">
             <div class="metric-label">Single / Three Phase</div>
-            <div class="metric-val" id="phase-stat">272 / 131</div>
-            <div class="metric-sub">67.5% Single • 32.5% Three Phase</div>
+            <div class="metric-val" id="phase-stat">277 / 126</div>
+            <div class="metric-sub" id="phase-sub">68.7% Single • 31.3% Three Phase</div>
         </div>
         <div class="metric-card amber">
             <div class="metric-label">Operational Status</div>
-            <div class="metric-val" id="status-stat">367 Active</div>
-            <div class="metric-sub">24 Faulty • 12 Decommissioned</div>
+            <div class="metric-val" id="status-stat">238 Installed</div>
+            <div class="metric-sub" id="status-sub">90 Faulty • 75 Decommissioned</div>
         </div>
         <div class="metric-card indigo">
             <div class="metric-label">Cache Policy (TTL)</div>
@@ -1068,7 +1068,35 @@
             }
         }
 
-        // Fetch Health Stats
+        function updateStatsCards(stats) {
+            if (!stats) return;
+            if (stats.total_meters !== undefined) {
+                document.getElementById('total-meters-stat').innerText = stats.total_meters;
+            }
+            if (stats.phases) {
+                const single = stats.phases.single;
+                const three = stats.phases.three;
+                const singlePct = stats.phases.single_pct;
+                const threePct = stats.phases.three_pct;
+                document.getElementById('phase-stat').innerText = `${single} / ${three}`;
+                const phaseSub = document.getElementById('phase-sub');
+                if (phaseSub) {
+                    phaseSub.innerText = `${singlePct}% Single • ${threePct}% Three Phase`;
+                }
+            }
+            if (stats.statuses) {
+                const installed = stats.statuses.Installed || stats.statuses.Active || 0;
+                const faulty = stats.statuses.Faulty || 0;
+                const decomm = stats.statuses.Decommissioned || 0;
+                document.getElementById('status-stat').innerText = `${installed} Installed`;
+                const statusSub = document.getElementById('status-sub');
+                if (statusSub) {
+                    statusSub.innerText = `${faulty} Faulty • ${decomm} Decommissioned`;
+                }
+            }
+        }
+
+        // Fetch Health Stats & Dynamic Real Data Counters
         async function fetchHealth() {
             try {
                 const res = await fetch('/api/v1/health');
@@ -1076,6 +1104,9 @@
                     const data = await res.json();
                     document.getElementById('total-meters-stat').innerText = data.indexed_meters_count || '403';
                     document.getElementById('portal-status-sub').innerText = `Portal ${data.portal} • TTL ${data.cache_ttl_meters_sec}s`;
+                    if (data.stats) {
+                        updateStatsCards(data.stats);
+                    }
                 }
             } catch (err) {
                 console.error('Health check failed:', err);

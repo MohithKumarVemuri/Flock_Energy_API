@@ -122,10 +122,18 @@ def parse_breadcrumb(soup: BeautifulSoup) -> Dict[str, HierarchyNode]:
     if crumb_items:
         crumbs = [el.get_text(strip=True) for el in crumb_items]
     else:
-        breadcrumb_el = soup.find("nav", class_=re.compile(r"breadcrumb", re.I)) or soup.find(class_=re.compile(r"breadcrumb", re.I))
-        if breadcrumb_el:
-            raw_text = breadcrumb_el.get_text(separator=" ")
-            crumbs = [c.strip() for c in raw_text.split(">") if c.strip()]
+        nav_el = soup.find("nav", class_=re.compile(r"breadcrumb", re.I)) or soup.find(class_=re.compile(r"breadcrumb", re.I))
+        if not nav_el:
+            main_el = soup.find("main")
+            if main_el:
+                nav_el = main_el.find("nav")
+        if nav_el:
+            spans = [s.get_text(strip=True) for s in nav_el.find_all("span")]
+            if spans:
+                crumbs = [s for s in spans if s not in ("›", ">", "/", "-", "»") and s]
+            else:
+                raw_text = nav_el.get_text(separator=" ")
+                crumbs = [c.strip() for c in re.split(r"[>›»]", raw_text) if c.strip()]
 
     hierarchy: Dict[str, HierarchyNode] = {}
     path_segments: List[str] = []

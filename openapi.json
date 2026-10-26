@@ -12,7 +12,7 @@
           "System"
         ],
         "summary": "Health Check",
-        "description": "Check API service status, index metrics, and upstream portal reachability.",
+        "description": "Check API service status, index metrics, and upstream portal reachability via real login ping.",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -20,6 +20,28 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Dashboard Statistics",
+        "description": "Compute operational summary statistics directly from real index/portal data.",
+        "operationId": "get_stats_api_v1_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardStats"
+                }
               }
             }
           }
@@ -54,7 +76,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 100,
+              "maximum": 500,
               "minimum": 1,
               "description": "Items per page",
               "default": 20,
@@ -151,6 +173,18 @@
               "title": "Dt Code"
             },
             "description": "Filter by distribution transformer code, e.g. DT-001"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force refresh bulk export from portal",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Force refresh bulk export from portal"
           }
         ],
         "responses": {
@@ -235,6 +269,18 @@
               "title": "Limit"
             },
             "description": "Maximum meters to return"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force refresh bulk export from portal",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Force refresh bulk export from portal"
           }
         ],
         "responses": {
@@ -331,16 +377,6 @@
               }
             }
           },
-          "503": {
-            "description": "Upstream authentication failure",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -360,7 +396,7 @@
           "Consumption"
         ],
         "summary": "Get Meter Interval Consumption",
-        "description": "Retrieve half-hourly kWh, kVAh, and voltage interval readings sorted ascending by ISO timestamp.",
+        "description": "Retrieve half-hourly kWh, kVAh, and voltage interval readings sorted ascending by ISO timestamp. Never synthesized.",
         "operationId": "get_consumption_api_v1_meters__meter_id__consumption_get",
         "parameters": [
           {
@@ -472,6 +508,16 @@
               }
             }
           },
+          "502": {
+            "description": "Upstream portal unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -493,12 +539,36 @@
         "summary": "Get Hierarchy Tree",
         "description": "Get the full distribution tree keyed by unique composite paths, with data quality anomaly reporting.",
         "operationId": "get_hierarchy_api_v1_hierarchy_get",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Force refresh bulk export from portal",
+              "default": false,
+              "title": "Refresh"
+            },
+            "description": "Force refresh bulk export from portal"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -560,6 +630,50 @@
         ],
         "title": "ConsumptionResponse",
         "description": "Consumption interval readings series for a meter."
+      },
+      "DashboardStats": {
+        "properties": {
+          "total_meters": {
+            "type": "integer",
+            "title": "Total Meters",
+            "description": "Total meters indexed"
+          },
+          "statuses": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Statuses",
+            "description": "Breakdown by operational status"
+          },
+          "phases": {
+            "$ref": "#/components/schemas/PhaseStats",
+            "description": "Breakdown by phase type"
+          },
+          "makes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Makes",
+            "description": "Breakdown by manufacturer"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Data source: 'live' or 'export_snapshot'",
+            "default": "live"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_meters",
+          "statuses",
+          "phases",
+          "makes"
+        ],
+        "title": "DashboardStats",
+        "description": "Real-time operational summary metrics computed from index/portal."
       },
       "ErrorDetail": {
         "properties": {
@@ -740,6 +854,12 @@
             "type": "object",
             "title": "Hierarchy",
             "description": "Keyed hierarchy from zone to distribution transformer"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Data source: 'live' or 'export_snapshot'",
+            "default": "live"
           }
         },
         "type": "object",
@@ -830,6 +950,12 @@
             "type": "integer",
             "title": "Total Pages",
             "description": "Total pages available"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Data source: 'live' or 'export_snapshot'",
+            "default": "live"
           }
         },
         "type": "object",
@@ -841,6 +967,39 @@
           "total_pages"
         ],
         "title": "Page[MeterSummary]"
+      },
+      "PhaseStats": {
+        "properties": {
+          "single": {
+            "type": "integer",
+            "title": "Single",
+            "description": "Single phase count"
+          },
+          "three": {
+            "type": "integer",
+            "title": "Three",
+            "description": "Three phase count"
+          },
+          "single_pct": {
+            "type": "number",
+            "title": "Single Pct",
+            "description": "Percentage of single phase meters"
+          },
+          "three_pct": {
+            "type": "number",
+            "title": "Three Pct",
+            "description": "Percentage of three phase meters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "single",
+          "three",
+          "single_pct",
+          "three_pct"
+        ],
+        "title": "PhaseStats",
+        "description": "Statistics for phase distribution."
       },
       "Reading": {
         "properties": {

@@ -40,6 +40,7 @@ class Meter(MeterSummary):
     build: Optional[str] = Field(None, description="Portal template build: legacy or v2")
     location: Location = Field(..., description="Geographic coordinates")
     hierarchy: Dict[str, HierarchyNode] = Field(..., description="Keyed hierarchy from zone to distribution transformer")
+    source: str = Field("live", description="Data source: 'live' or 'export_snapshot'")
 
     model_config = ConfigDict(extra="ignore")
 
@@ -72,6 +73,28 @@ class Page(BaseModel, Generic[T]):
     page_size: int = Field(..., description="Number of items per page")
     total: int = Field(..., description="Total items available")
     total_pages: int = Field(..., description="Total pages available")
+    source: str = Field("live", description="Data source: 'live' or 'export_snapshot'")
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class PhaseStats(BaseModel):
+    """Statistics for phase distribution."""
+    single: int = Field(..., description="Single phase count")
+    three: int = Field(..., description="Three phase count")
+    single_pct: float = Field(..., description="Percentage of single phase meters")
+    three_pct: float = Field(..., description="Percentage of three phase meters")
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class DashboardStats(BaseModel):
+    """Real-time operational summary metrics computed from index/portal."""
+    total_meters: int = Field(..., description="Total meters indexed")
+    statuses: Dict[str, int] = Field(..., description="Breakdown by operational status")
+    phases: PhaseStats = Field(..., description="Breakdown by phase type")
+    makes: Dict[str, int] = Field(..., description="Breakdown by manufacturer")
+    source: str = Field("live", description="Data source: 'live' or 'export_snapshot'")
 
     model_config = ConfigDict(extra="ignore")
 

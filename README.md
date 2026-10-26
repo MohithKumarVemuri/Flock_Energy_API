@@ -12,11 +12,12 @@ The Urja Ops Portal exposes 403 smart meters across the Jaipur power distributio
 - Manages authenticated portal sessions with automatic re-login on expiry.
 - Throttles upstream calls to a concurrency ceiling of 3 with exponential backoff on transient errors.
 - Exposes fast paginated listings, interval consumption, hierarchy tree resolution, and geospatial radius search.
-- Provides an in-memory bulk index loaded from `meter-export.json` for microsecond response times.
+- Provides a synchronized in-memory bulk index loaded directly from the portal's bulk export (falling back to `meter-export.json` snapshot only if unreachable).
+- Includes an interactive ops web dashboard featuring live Leaflet maps, dynamic metrics ribbon, half-hourly consumption curve visualizer, and hierarchy explorer, accessible at `/`.
 
 ### Project Structure
 ```
-flock-energy-api/
+Flock_Energy_API/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py            # FastAPI app, route handlers, error mappings
@@ -33,15 +34,14 @@ flock-energy-api/
 │   │   ├── meter_list.html
 │   │   ├── meter_detail_legacy.html
 │   │   ├── meter_detail_v2.html
-│   │   ├── meter_detail_blank_hierarchy.html
-│   │   └── meter-export.json
+│   │   └── meter_detail_blank_hierarchy.html
 │   ├── test_parsers.py    # Unit tests for normalization and template parsers
 │   ├── test_client.py     # Mocked HTTP transport tests for re-auth and retries
 │   └── test_api.py        # End-to-end FastAPI TestClient integration tests
 ├── scripts/
 │   └── export_openapi.py  # Script extracting openapi.json from FastAPI app
 ├── data/
-│   └── meter-export.json  # Seed bulk export of all 403 Jaipur meters
+│   └── meter-export.json  # Fallback snapshot of all 403 Jaipur meters
 ├── openapi.json           # Exported OpenAPI 3.1 specification
 ├── PROTOCOL.md            # Portal recon documentation & protocol specification
 ├── README.md              # Project documentation & run guide
@@ -56,14 +56,15 @@ flock-energy-api/
 ## 2. Install / Configure / Run
 
 ### Prerequisites
-- Python 3.10+ (Tested with Python 3.14 / 3.11)
+- Python 3.10+ (Tested with Python 3.11)
 - `pip` or virtualenv
 
 ### Setup Instructions
 
 1. **Clone the repository and enter directory**:
    ```bash
-   cd flock-energy-api
+   git clone https://github.com/MohithKumarVemuri/Flock_Energy_API.git
+   cd Flock_Energy_API
    ```
 
 2. **Create and activate a virtual environment**:
@@ -90,14 +91,13 @@ flock-energy-api/
    Edit `.env` if custom portal credentials or URLs are required:
    ```ini
    PORTAL_BASE_URL=https://urja-ops.flockenergy.tech
-   PORTAL_USERNAME=operator
-   PORTAL_PASSWORD=secret
+   PORTAL_USERNAME=operator@urja.local
+   PORTAL_PASSWORD=urja-ops-2026
    PORTAL_MAX_CONCURRENCY=3
    PORTAL_TIMEOUT_SECONDS=10.0
    PORTAL_MAX_RETRIES=3
    CACHE_TTL_METERS=3600
    CACHE_TTL_CONSUMPTION=60
-   PORTAL_SIMULATE_IF_UNREACHABLE=true
    ```
 
 5. **Run the Automated Tests**:
@@ -354,10 +354,9 @@ curl -s http://127.0.0.1:8000/api/v1/meters/invalid_id
 
 ## 8. What I'd Improve with More Time
 
-1. **Persistent Spatial Database**: Upgrade in-memory Haversine distance filtering to an embedded SQLite + Spatialite or PostgreSQL + PostGIS database with an R-Tree index for sub-millisecond bounding box lookups across millions of meters.
-2. **Interactive Ops Web Dashboard**: Build the React + Vite frontend with Leaflet maps showing feeder lines and markers colored by status (Installed, Faulty, Decommissioned), plus consumption load curves with Chart.js.
-3. **Automated Upstream Health Ping Daemon**: Introduce a background heartbeat task that periodically verifies portal session status and refreshes the bulk index if upstream changes occur.
-4. **Time-Series Persistence**: Pipe half-hourly readings into TimescaleDB or ClickHouse for long-term historical anomaly detection and transformer overloading alerts.
+1. **Persistent Spatial Database**: Upgrade in-memory Haversine distance filtering to an embedded SQLite + Spatialite or PostgreSQL + PostGIS database with an R-Tree index for spatial bounding box lookups across millions of meters.
+2. **Automated Continuous Re-Sync Heartbeat**: Introduce a background daemon that periodically refreshes the bulk export and notifies connected clients of topology changes via WebSockets.
+3. **Time-Series Persistence**: Pipe half-hourly readings into TimescaleDB or ClickHouse for long-term historical anomaly detection and transformer overloading alerts.
 
 ---
 

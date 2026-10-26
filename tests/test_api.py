@@ -19,6 +19,8 @@ def mock_portal_handler(request: httpx.Request) -> httpx.Response:
     elif path == "/meters/J100004":
         html = (FIXTURES_DIR / "meter_detail_v2.html").read_text(encoding="utf-8")
         return httpx.Response(200, text=html)
+    elif "J100008" in path:
+        return httpx.Response(502, text="Upstream Portal Unavailable")
     elif path.startswith("/meters/J999"):
         return httpx.Response(404, text="Not Found")
     return httpx.Response(404, text="Not Found")
@@ -36,8 +38,31 @@ def test_health_check():
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "healthy"
+    assert data["status"] in ("healthy", "degraded")
+    assert "simulated" not in str(data).lower()
     assert "indexed_meters_count" in data
+    assert "stats" in data
+    assert data["stats"]["total_meters"] == 403
+    assert data["stats"]["statuses"]["Installed"] == 238
+    assert data["stats"]["statuses"]["Faulty"] == 90
+    assert data["stats"]["statuses"]["Decommissioned"] == 75
+    assert data["stats"]["phases"]["single"] == 277
+    assert data["stats"]["phases"]["three"] == 126
+    assert "X-Data-Source" in response.headers
+
+
+def test_dashboard_stats():
+    response = client.get("/api/v1/stats")
+    assert response.status_code == 200
+    stats = response.json()
+    assert stats["total_meters"] == 403
+    assert stats["statuses"]["Installed"] == 238
+    assert stats["statuses"]["Faulty"] == 90
+    assert stats["statuses"]["Decommissioned"] == 75
+    assert stats["phases"]["single"] == 277
+    assert stats["phases"]["three"] == 126
+    assert stats["phases"]["single_pct"] == 68.7
+    assert stats["phases"]["three_pct"] == 31.3
 
 
 def test_list_meters_pagination():
@@ -138,6 +163,26 @@ def test_meter_consumption():
     assert "timestamp" in r0
     assert "kwh" in r0
     assert "kvah" in r0
+    assert resp.headers.get("X-Data-Source") == "live"
+
+
+def test_consumption_unreachable_returns_502():
+    # J100008 has upstream 502 error; consumption must never fall back
+    resp = client.get("/api/v1/meters/J100008/consumption")
+    assert resp.status_code == 502
+    err = resp.json()
+    assert "error" in err
+    assert err["error"]["code"] == "BAD_GATEWAY"
+
+
+def test_meter_metadata_fallback_to_export_snapshot():
+    # When live fetch fails on /meters/J100008, metadata falls back to snapshot
+    resp = client.get("/api/v1/meters/J100008")
+    assert resp.status_code == 200
+    assert resp.headers.get("X-Data-Source") == "export_snapshot"
+    meter = resp.json()
+    assert meter["meter_id"] == "J100008"
+    assert meter["source"] == "export_snapshot"
 
 
 def test_hierarchy_tree_and_anomalies():

@@ -2,13 +2,20 @@ import json
 import math
 import logging
 import re
+import time
+import hmac
+import hashlib
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
 
+import httpx
 from app.config import settings
 from app.cache import cache
 from app.client import PortalClient, PortalUnavailable, PortalAuthError, PortalParseError
 from app.parsers import (
+    parse_clean_string,
+    parse_number,
+    parse_timestamp,
     parse_meter_detail,
     parse_consumption,
     parse_meter_list,
@@ -22,6 +29,8 @@ from app.models import (
     Reading,
     ConsumptionResponse,
     Page,
+    PhaseStats,
+    DashboardStats,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,15 +61,80 @@ class MeterService:
         # In-memory bulk data index
         self._meters_by_id: Dict[str, Meter] = {}
         self._summaries_list: List[MeterSummary] = []
-        self._consumption_by_id: Dict[str, List[Reading]] = {}
+        self._data_source: str = "export_snapshot"
+        self._last_bulk_refresh: float = 0.0
         
-        # Seed in-memory index
-        self._load_bulk_data()
+        # Seed initial fallback snapshot so app is immediately queryable synchronously
+        self._load_snapshot_file()
 
-    def _load_bulk_data(self) -> None:
-        """Load bulk meter-export.json into memory for high-performance querying."""
+    @property
+    def data_source(self) -> str:
+        return self._data_source
+
+    def _ingest_raw_meters(self, raw_data: List[Dict[str, Any]]) -> None:
+        """Parse raw export meters into in-memory indices."""
+        self._meters_by_id.clear()
+        self._summaries_list.clear()
+
+        for item in raw_data:
+            meter_id = item.get("meterId")
+            if not meter_id:
+                continue
+
+            hierarchy_dict: Dict[str, HierarchyNode] = {}
+            path_segments: List[str] = []
+            raw_h = item.get("hierarchy", {})
+
+            for level in HIERARCHY_LEVELS:
+                node_raw = raw_h.get(level, {})
+                code = node_raw.get("code") if node_raw.get("code") else None
+                name = node_raw.get("name") if node_raw.get("name") else None
+                
+                segment = code if code else (name if name else f"unknown_{level}")
+                path_segments.append(segment)
+                path_key = "/".join(path_segments)
+
+                hierarchy_dict[level] = HierarchyNode(
+                    level=level,
+                    code=code,
+                    name=name,
+                    path_key=path_key,
+                )
+
+            geo = item.get("geo", {})
+            lat = float(geo.get("lat", 0.0))
+            lng = float(geo.get("lng", 0.0))
+
+            meter = Meter(
+                meter_id=meter_id,
+                serial_no=item.get("serialNo", ""),
+                make=item.get("make", ""),
+                phase_type=item.get("phaseType", "single"),
+                status=item.get("installStatus", "Installed"),
+                dt_code=item.get("dtCode", ""),
+                install_type=item.get("installType"),
+                build=item.get("build"),
+                location=Location(lat=lat, lng=lng),
+                hierarchy=hierarchy_dict,
+                source=self._data_source,
+            )
+
+            self._meters_by_id[meter_id] = meter
+            self._summaries_list.append(
+                MeterSummary(
+                    meter_id=meter.meter_id,
+                    serial_no=meter.serial_no,
+                    make=meter.make,
+                    phase_type=meter.phase_type,
+                    status=meter.status,
+                    dt_code=meter.dt_code,
+                )
+            )
+
+    def _load_snapshot_file(self) -> None:
+        """Load fallback meter-export.json snapshot into memory when live fetch fails."""
         if not self.data_path.exists():
-            logger.warning(f"Bulk data file not found at {self.data_path}")
+            logger.warning(f"Fallback snapshot data file not found at {self.data_path}")
             return
 
         try:
@@ -68,67 +142,107 @@ class MeterService:
                 raw_data = json.load(f)
 
             if isinstance(raw_data, list):
-                for item in raw_data:
-                    meter_id = item.get("meterId")
-                    if not meter_id:
-                        continue
-
-                    # Build hierarchy nodes with hierarchical path keys
-                    hierarchy_dict: Dict[str, HierarchyNode] = {}
-                    path_segments: List[str] = []
-                    raw_h = item.get("hierarchy", {})
-
-                    for level in HIERARCHY_LEVELS:
-                        node_raw = raw_h.get(level, {})
-                        code = node_raw.get("code") if node_raw.get("code") else None
-                        name = node_raw.get("name") if node_raw.get("name") else None
-                        
-                        segment = code if code else (name if name else f"unknown_{level}")
-                        path_segments.append(segment)
-                        path_key = "/".join(path_segments)
-
-                        hierarchy_dict[level] = HierarchyNode(
-                            level=level,
-                            code=code,
-                            name=name,
-                            path_key=path_key,
-                        )
-
-                    geo = item.get("geo", {})
-                    lat = float(geo.get("lat", 0.0))
-                    lng = float(geo.get("lng", 0.0))
-
-                    meter = Meter(
-                        meter_id=meter_id,
-                        serial_no=item.get("serialNo", ""),
-                        make=item.get("make", ""),
-                        phase_type=item.get("phaseType", "single"),
-                        status=item.get("installStatus", "Installed"),
-                        dt_code=item.get("dtCode", ""),
-                        install_type=item.get("installType"),
-                        build=item.get("build"),
-                        location=Location(lat=lat, lng=lng),
-                        hierarchy=hierarchy_dict,
-                    )
-
-                    self._meters_by_id[meter_id] = meter
-                    self._summaries_list.append(
-                        MeterSummary(
-                            meter_id=meter.meter_id,
-                            serial_no=meter.serial_no,
-                            make=meter.make,
-                            phase_type=meter.phase_type,
-                            status=meter.status,
-                            dt_code=meter.dt_code,
-                        )
-                    )
-
-            logger.info(f"Loaded {len(self._meters_by_id)} meters into in-memory bulk index")
+                self._data_source = "export_snapshot"
+                self._ingest_raw_meters(raw_data)
+            logger.info(f"Loaded {len(self._meters_by_id)} meters from fallback snapshot {self.data_path}")
         except Exception as e:
-            logger.error(f"Failed to load bulk data from {self.data_path}: {e}")
+            logger.error(f"Failed to load snapshot from {self.data_path}: {e}")
+
+    async def fetch_bulk_export(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        Fetch the bulk export directly from the live portal:
+        1. Fetch signingSecret from /portal/keys
+        2. HMAC-SHA256 sign GET /portal/export page=1
+        3. Fetch /portal/export?page=1
+        """
+        try:
+            r_keys = await self.client.request("GET", "/portal/keys")
+            if r_keys.status_code != 200:
+                logger.warning(f"Failed to fetch portal signing keys: status {r_keys.status_code}")
+                return None
+            signing_secret = r_keys.json().get("data", {}).get("signingSecret")
+            if not signing_secret:
+                return None
+
+            timestamp = str(int(time.time()))
+            method = "GET"
+            path = "/portal/export"
+            query = "page=1"
+            msg = f"{method}\n{path}\n{query}\n{timestamp}".encode("utf-8")
+            signature = hmac.new(signing_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+
+            headers = {
+                "x-timestamp": timestamp,
+                "x-signature": signature,
+            }
+            resp = await self.client.request("GET", f"{path}?{query}", headers=headers)
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                if isinstance(data, list) and len(data) > 0:
+                    return data
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to fetch live bulk export: {e}")
+            return None
+
+    async def load_or_refresh_bulk_data(self, force_refresh: bool = False) -> str:
+        """
+        Refresh bulk meter data.
+        Fetches live export from portal. If successful, sets data_source='live'.
+        Only if live export fails, falls back to data/meter-export.json (data_source='export_snapshot').
+        """
+        now = time.time()
+        if not force_refresh and (now - self._last_bulk_refresh < settings.CACHE_TTL_METERS) and self._data_source == "live":
+            return self._data_source
+
+        live_export = await self.fetch_bulk_export()
+        if live_export:
+            self._data_source = "live"
+            self._ingest_raw_meters(live_export)
+            self._last_bulk_refresh = now
+            logger.info("Successfully loaded bulk export from live portal (source=live)")
+            return "live"
+
+        # Fall back to snapshot file
+        logger.warning(f"Live export failed. Falling back to local snapshot: {self.data_path}")
+        self._load_snapshot_file()
+        self._data_source = "export_snapshot"
+        self._last_bulk_refresh = now
+        return "export_snapshot"
+
+    def get_stats(self) -> DashboardStats:
+        """Compute real operational statistics directly from the current index / live data."""
+        total = len(self._summaries_list)
+        statuses: Dict[str, int] = {}
+        phases: Dict[str, int] = {"single": 0, "three": 0}
+        makes: Dict[str, int] = {}
+
+        for m in self._summaries_list:
+            statuses[m.status] = statuses.get(m.status, 0) + 1
+            phase_norm = m.phase_type.lower()
+            phases[phase_norm] = phases.get(phase_norm, 0) + 1
+            makes[m.make] = makes.get(m.make, 0) + 1
+
+        single_cnt = phases.get("single", 0)
+        three_cnt = phases.get("three", 0)
+        single_pct = round((single_cnt / total * 100), 1) if total > 0 else 0.0
+        three_pct = round((three_cnt / total * 100), 1) if total > 0 else 0.0
+
+        return DashboardStats(
+            total_meters=total,
+            statuses=statuses,
+            phases=PhaseStats(
+                single=single_cnt,
+                three=three_cnt,
+                single_pct=single_pct,
+                three_pct=three_pct,
+            ),
+            makes=makes,
+            source=self._data_source,
+        )
 
     async def check_health(self) -> Dict[str, Any]:
-        """Check status of API service, in-memory index, and portal reachability."""
+        """Check status of API service, in-memory index, and portal reachability via real login ping."""
         portal_status = "unreachable"
         try:
             resp = await self.client.request("GET", "/login")
@@ -136,15 +250,18 @@ class MeterService:
                 portal_status = "reachable"
         except Exception as e:
             logger.debug(f"Health check portal ping: {e}")
-            if settings.PORTAL_SIMULATE_IF_UNREACHABLE:
-                portal_status = "simulated_local"
+            portal_status = "unreachable"
+
+        stats = self.get_stats()
 
         return {
-            "status": "healthy",
+            "status": "healthy" if portal_status == "reachable" else "degraded",
             "portal": portal_status,
             "indexed_meters_count": len(self._meters_by_id),
             "cache_ttl_meters_sec": settings.CACHE_TTL_METERS,
             "cache_ttl_consumption_sec": settings.CACHE_TTL_CONSUMPTION,
+            "data_source": self._data_source,
+            "stats": stats.model_dump(),
         }
 
     def list_meters(
@@ -157,7 +274,7 @@ class MeterService:
         phase_type: Optional[str] = None,
         dt_code: Optional[str] = None,
     ) -> Page[MeterSummary]:
-        """Filter and paginate meters efficiently from the in-memory index."""
+        """Filter and paginate meters efficiently from the current index."""
         results = self._summaries_list
 
         if q:
@@ -184,7 +301,7 @@ class MeterService:
             results = [m for m in results if m.dt_code.lower() == dt_clean]
 
         total = len(results)
-        page_size = max(1, min(page_size, 100))
+        page_size = max(1, min(page_size, 500))
         total_pages = max(1, math.ceil(total / page_size))
         page = max(1, min(page, total_pages))
 
@@ -198,45 +315,68 @@ class MeterService:
             page_size=page_size,
             total=total,
             total_pages=total_pages,
+            source=self._data_source,
         )
 
-    async def get_meter(self, meter_id: str, refresh: bool = False) -> Tuple[Meter, bool]:
+    async def get_meter(self, meter_id: str, refresh: bool = False) -> Tuple[Meter, bool, str]:
         """
         Retrieve meter detail by ID:
         1. Check cache (unless refresh=True)
-        2. Attempt live portal fetch if available
-        3. Fall back to in-memory bulk index
-        Returns: (Meter, is_cache_hit)
+        2. Attempt live portal fetch (/meters/{id} and /portal/meters/{id}/geo)
+        3. Fall back to export snapshot ONLY when live fetch fails
+        Returns: (Meter, is_cache_hit, source)
         """
         cache_key = f"meter:{meter_id}"
         if not refresh:
             cached_meter, hit = cache.get(cache_key)
             if hit and cached_meter:
-                return cached_meter, True
+                return cached_meter, True, cached_meter.source
 
         meter: Optional[Meter] = None
+        source = "live"
 
         # Attempt live portal fetch
         try:
             resp = await self.client.request("GET", f"/meters/{meter_id}")
             if resp.status_code == 200:
                 meter = parse_meter_detail(resp.text)
-                # Ensure the meter_id matches
                 if not meter.meter_id:
                     meter.meter_id = meter_id
-        except (PortalUnavailable, PortalAuthError, PortalParseError) as e:
-            logger.debug(f"Portal fetch for {meter_id} failed: {e}. Falling back to in-memory index.")
 
-        # Fallback to in-memory index
+                # If coordinates are missing/0, attempt to fetch /portal/meters/{meter_id}/geo
+                if meter.location.lat == 0.0 and meter.location.lng == 0.0:
+                    try:
+                        r_geo = await self.client.request("GET", f"/portal/meters/{meter_id}/geo")
+                        if r_geo.status_code == 200:
+                            g_data = r_geo.json().get("data", {})
+                            lat = parse_number(g_data.get("latitude") or g_data.get("lat"))
+                            lng = parse_number(g_data.get("longitude") or g_data.get("lng"))
+                            if lat is not None and lng is not None:
+                                meter.location = Location(lat=lat, lng=lng)
+                    except Exception:
+                        pass
+
+                meter.source = "live"
+                source = "live"
+            elif resp.status_code == 404:
+                raise KeyError(f"Meter with ID {meter_id} not found")
+        except KeyError:
+            raise
+        except (PortalUnavailable, PortalAuthError, PortalParseError, httpx.RequestError) as e:
+            logger.warning(f"Live portal fetch for {meter_id} failed: {e}. Falling back to export snapshot.")
+
+        # Fallback to export snapshot
         if meter is None:
             if meter_id in self._meters_by_id:
-                meter = self._meters_by_id[meter_id]
+                meter = self._meters_by_id[meter_id].model_copy()
+                meter.source = "export_snapshot"
+                source = "export_snapshot"
             else:
                 raise KeyError(f"Meter with ID {meter_id} not found")
 
         # Cache the result
         cache.set(cache_key, meter, settings.CACHE_TTL_METERS)
-        return meter, False
+        return meter, False, source
 
     async def get_consumption(
         self,
@@ -248,6 +388,7 @@ class MeterService:
     ) -> Tuple[ConsumptionResponse, bool]:
         """
         Retrieve half-hourly consumption readings for a meter.
+        Never synthesized or simulated. If portal unreachable or fails, raises PortalUnavailable.
         Returns: (ConsumptionResponse, is_cache_hit)
         """
         cache_key = f"consumption:{meter_id}"
@@ -261,48 +402,50 @@ class MeterService:
                 is_hit = True
 
         if readings is None:
-            # Try fetching from portal
+            # 1. Try live portal JSON endpoint /portal/meters/{meter_id}/energy
             try:
-                resp = await self.client.request("GET", f"/meters/{meter_id}")
+                resp = await self.client.request("GET", f"/portal/meters/{meter_id}/energy")
                 if resp.status_code == 200:
-                    readings = parse_consumption(resp.text)
+                    data = resp.json()
+                    items = data.get("data", [])
+                    readings_list = []
+                    for item in items:
+                        ts = parse_timestamp(item.get("timestamp", ""))
+                        kwh = parse_number(item.get("kwh"))
+                        kvah = parse_number(item.get("kvah"))
+                        volt_r = parse_number(item.get("voltR") or item.get("volt_r") or item.get("voltage_r"))
+                        if ts and kwh is not None:
+                            readings_list.append(
+                                Reading(
+                                    timestamp=ts,
+                                    kwh=kwh,
+                                    kvah=kvah if kvah is not None else 0.0,
+                                    voltage_r=volt_r,
+                                )
+                            )
+                    if readings_list:
+                        readings = readings_list
             except Exception as e:
-                logger.debug(f"Live portal consumption fetch for {meter_id} failed: {e}")
+                logger.debug(f"Live /energy endpoint for {meter_id}: {e}")
 
-            # If portal had no readings, generate a representative half-hourly series
+            # 2. Try HTML table from /meters/{meter_id}
+            if readings is None:
+                try:
+                    resp_html = await self.client.request("GET", f"/meters/{meter_id}")
+                    if resp_html.status_code == 200:
+                        parsed = parse_consumption(resp_html.text)
+                        if parsed:
+                            readings = parsed
+                    elif resp_html.status_code == 404:
+                        raise KeyError(f"Meter with ID {meter_id} not found")
+                except KeyError:
+                    raise
+                except Exception as e:
+                    logger.debug(f"HTML consumption table for {meter_id}: {e}")
+
+            # If still None or empty, NEVER simulate! Raise PortalUnavailable
             if not readings:
-                if meter_id not in self._meters_by_id:
-                    raise KeyError(f"Meter with ID {meter_id} not found")
-                
-                # Representative interval consumption
-                base_kwh = 10000.0 + (int(meter_id.replace("J", "")) % 500) * 10
-                base_kvah = base_kwh * 0.95
-                readings = [
-                    Reading(
-                        timestamp="2026-10-25T15:00:00+05:30",
-                        kwh=base_kwh,
-                        kvah=base_kvah,
-                        voltage_r=239.5,
-                    ),
-                    Reading(
-                        timestamp="2026-10-25T15:30:00+05:30",
-                        kwh=base_kwh + 2.4,
-                        kvah=base_kvah + 2.6,
-                        voltage_r=240.1,
-                    ),
-                    Reading(
-                        timestamp="2026-10-25T16:00:00+05:30",
-                        kwh=base_kwh + 5.1,
-                        kvah=base_kvah + 5.4,
-                        voltage_r=238.8,
-                    ),
-                    Reading(
-                        timestamp="2026-10-25T16:30:00+05:30",
-                        kwh=base_kwh + 7.9,
-                        kvah=base_kvah + 8.3,
-                        voltage_r=239.2,
-                    ),
-                ]
+                raise PortalUnavailable(f"Upstream portal returned no consumption data for meter {meter_id}")
 
             cache.set(cache_key, readings, settings.CACHE_TTL_CONSUMPTION)
 
@@ -334,14 +477,12 @@ class MeterService:
         """
         Build complete hierarchical distribution tree keyed by composite path.
         Emits nodes with code: null / name: null where blank.
-        Includes data_quality block listing anomalies.
+        Includes data_quality block listing anomalies and data source indicator.
         """
         tree_root: Dict[str, Any] = {}
         anomalies: List[Dict[str, Any]] = []
 
-        # Track codes under different parents to detect code reuse
         code_parents: Dict[str, set] = {}
-        # Track DT names to detect DT-007 conflicting names
         dt_names: Dict[str, set] = {}
 
         for meter in self._meters_by_id.values():
@@ -357,30 +498,24 @@ class MeterService:
                 name = node.name
                 path_key = node.path_key
 
-                # Anomaly detection: blank code or blank name
-                if code is None:
+                # Record anomaly for blank code or name
+                if code is None or name is None:
                     anomalies.append({
-                        "meter_id": meter.meter_id,
                         "level": level,
-                        "anomaly": "blank_code",
+                        "meter_id": meter.meter_id,
                         "path_key": path_key,
+                        "anomaly": "missing_code" if code is None else "missing_name",
+                        "code": code,
                         "name": name,
                     })
-                if name is None:
-                    anomalies.append({
-                        "meter_id": meter.meter_id,
-                        "level": level,
-                        "anomaly": "blank_name",
-                        "path_key": path_key,
-                        "code": code,
-                    })
 
-                # Check code reuse across parents
+                # Track parent for code reuse detection
                 if code:
                     if code not in code_parents:
                         code_parents[code] = set()
                     code_parents[code].add(parent_path)
 
+                # Track DT names for conflicting DT name detection
                 if level == "dt" and code and name:
                     if code not in dt_names:
                         dt_names[code] = set()
@@ -401,21 +536,18 @@ class MeterService:
                 curr_level_dict = curr_level_dict[path_key]["children"]
                 parent_path = path_key
 
-        # Collect reused code anomalies
         reused_codes = [
             {"code": c, "parents": sorted(list(parents))}
             for c, parents in code_parents.items()
             if len(parents) > 1 and any(p != "" for p in parents)
         ]
 
-        # Collect conflicting DT name anomalies
         conflicting_dts = [
             {"dt_code": dt, "conflicting_names": sorted(list(names))}
             for dt, names in dt_names.items()
             if len(names) > 1
         ]
 
-        # Deduplicate anomalies
         seen_anom = set()
         dedup_anomalies = []
         for anom in anomalies:
@@ -425,6 +557,7 @@ class MeterService:
                 dedup_anomalies.append(anom)
 
         return {
+            "source": self._data_source,
             "hierarchy": tree_root,
             "data_quality": {
                 "unique_hierarchy_paths": len(tree_root),
@@ -455,6 +588,7 @@ class MeterService:
                     "distance_km": round(dist, 3),
                     "location": {"lat": meter.location.lat, "lng": meter.location.lng},
                     "dt_code": meter.dt_code,
+                    "source": self._data_source,
                 })
 
         nearby.sort(key=lambda m: m["distance_km"])
