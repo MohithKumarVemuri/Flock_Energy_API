@@ -151,7 +151,7 @@ async def health():
 )
 def list_meters(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(20, ge=1, le=500, description="Items per page"),
     q: Optional[str] = Query(None, description="Search term matching meter ID or serial number"),
     make: Optional[str] = Query(None, description="Filter by make: HPL, Genus, Secure, Allied, L&T"),
     status: Optional[str] = Query(None, description="Filter by status: Installed, Faulty, Decommissioned"),
