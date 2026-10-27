@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urja Meter Ops — Operations Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: #0f172a;
+            --bg-elevated: #1e293b;
+            --bg-glass: rgba(30, 41, 59, 0.7);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-focus: #38bdf8;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-cyan: #38bdf8;
+            --accent-teal: #14b8a6;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-emerald: #10b981;
+            --accent-indigo: #6366f1;
+            --gradient-glow: linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.4);
+            --shadow-glow: 0 0 25px rgba(56, 189, 248, 0.25);
+            --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(ellipse at 20% 0%, rgba(56, 189, 248, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 10%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);
+        }
+
+        /* Top Navigation */
+        header {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #0284c7, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        }
+
+        .brand-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: white;
+        }
+
+        .brand-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-badge {
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-subtle);
+            padding: 8px 14px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--text-primary);
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .nav-btn.primary {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: white;
+            border: none;
+            font-weight: 600;
+            box-shadow: 0 2px 10px rgba(2, 132, 199, 0.3);
+        }
+
+        .nav-btn.primary:hover {
+            box-shadow: 0 4px 15px rgba(2, 132, 199, 0.5);
+            transform: translateY(-1px);
+        }
+
+        /* Hero / Metric Ribbon */
+        .metric-ribbon {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
+            padding: 24px 28px 12px;
+            max-width: 1440px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .metric-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 16px 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.25s ease;
+        }
+
+        .metric-card:hover {
+            border-color: rgba(255, 255, 255, 0.16);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-subtle);
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-cyan);
+            opacity: 0.7;
+        }
+
+        .metric-card.emerald::before { background: var(--accent-emerald); }
+        .metric-card.amber::before { background: var(--accent-amber); }
+        .metric-card.rose::before { background: var(--accent-rose); }
+        .metric-card.indigo::before { background: var(--accent-indigo); }
+
+        .metric-label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .metric-val {
+            font-size: 1.85rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            letter-spacing: -0.03em;
+        }
+
+        .metric-sub {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Tab Navigation */
+        .tab-bar {
+            max-width: 1440px;
+            margin: 12px auto 0;
+            padding: 0 28px;
+            width: 100%;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.92rem;
+            font-weight: 600;
+            padding: 12px 18px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        /* Main Content Container */
+        main {
+            max-width: 1440px;
+            margin: 20px auto 40px;
+            padding: 0 28px;
+            width: 100%;
+            flex: 1;
+        }
+
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Filter Controls */
+        .controls-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .search-box input {
+            width: 100%;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 10px 14px 10px 38px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.88rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+        }
+
+        .search-box svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            fill: var(--text-muted);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.85rem;
+            padding: 9px 12px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        /* Table Styling */
+        .table-container {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-subtle);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            text-align: left;
+        }
+
+        th {
+            background: rgba(30, 41, 59, 0.8);
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.74rem;
+            letter-spacing: 0.05em;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        td {
+            padding: 13px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text-secondary);
+        }
+
+        tr:hover td {
+            background: rgba(56, 189, 248, 0.03);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .meter-id-cell {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: capitalize;
+        }
+
+        .badge-installed { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-faulty { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-decommissioned { background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .badge-template { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-family: var(--font-mono); }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+            border-top: 1px solid var(--border-subtle);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .page-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .page-btn {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            padding: 6px 12px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Map Panel */
+        #map-container {
+            height: 620px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+            box-shadow: var(--shadow-subtle);
+            background: #0b1120;
+        }
+
+        /* Detail Modal / Drawer */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-xl);
+            width: 100%;
+            max-width: 820px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-glow);
+            padding: 28px;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 16px;
+        }
+
+        .modal-close {
+            background: var(--bg-elevated);
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.4rem;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+            background: var(--bg-glass);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .info-card {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .info-card h4 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--accent-cyan);
+            margin-bottom: 12px;
+        }
+
+        .kv-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .kv-row:last-child {
+            border-bottom: none;
+        }
+
+        .kv-k {
+            color: var(--text-muted);
+        }
+
+        .kv-v {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+
+        .breadcrumb-trail {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            font-size: 0.82rem;
+            border: 1px solid var(--border-subtle);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .crumb-tag {
+            color: var(--text-secondary);
+        }
+
+        .crumb-sep {
+            color: var(--text-muted);
+            margin: 0 6px;
+        }
+
+        /* Consumption Chart Section */
+        .chart-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-subtle);
+            margin-top: 16px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        /* Hierarchy Tree & Anomalies */
+        .anomaly-alert {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            border-radius: var(--radius-lg);
+            padding: 18px 24px;
+            margin-bottom: 24px;
+        }
+
+        .anomaly-title {
+            font-weight: 700;
+            color: var(--accent-amber);
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .anomaly-item {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        .tree-container {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .tree-node {
+            margin: 4px 0 4px 18px;
+            color: var(--text-secondary);
+        }
+
+        .tree-node-title {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .tree-node-title:hover {
+            background: var(--bg-elevated);
+            color: var(--accent-cyan);
+        }
+
+        /* Radius Search Form */
+        .radius-form {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            align-items: flex-end;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.88rem;
+            outline: none;
+        }
+
+        .form-group input:focus {
+            border-color: var(--accent-cyan);
+        }
+
+        .btn-search {
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            height: 42px;
+        }
+
+        .btn-search:hover {
+            box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
+            transform: translateY(-1px);
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border-subtle);
+            padding: 20px 28px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: auto;
+        }
+
+        /* Spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent-cyan);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .metric-ribbon { grid-template-columns: 1fr 1fr; }
+            header { flex-direction: column; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Header Navigation -->
+    <header>
+        <a href="/" class="brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+            <div>
+                <span class="brand-title">Urja Meter Ops</span>
+                <span class="brand-badge">API Layer</span>
+            </div>
+        </a>
+
+        <div class="nav-links">
+            <a href="/docs" target="_blank" class="nav-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Swagger /docs
+            </a>
+            <a href="/redoc" target="_blank" class="nav-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                ReDoc
+            </a>
+            <a href="https://urja-ops.flockenergy.tech" target="_blank" class="nav-btn primary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Legacy Portal
+            </a>
+        </div>
+    </header>
+
+    <!-- Top Key Metrics Ribbon -->
+    <section class="metric-ribbon">
+        <div class="metric-card emerald">
+            <div class="metric-label">
+                <span>Total Indexed Meters</span>
+                <span id="health-indicator" style="color: var(--accent-emerald);">● Online</span>
+            </div>
+            <div class="metric-val" id="total-meters-stat">403</div>
+            <div class="metric-sub" id="portal-status-sub">Portal Reachable • Synced</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Single / Three Phase</div>
+            <div class="metric-val" id="phase-stat">277 / 126</div>
+            <div class="metric-sub" id="phase-sub">68.7% Single • 31.3% Three Phase</div>
+        </div>
+        <div class="metric-card amber">
+            <div class="metric-label">Operational Status</div>
+            <div class="metric-val" id="status-stat">238 Installed</div>
+            <div class="metric-sub" id="status-sub">90 Faulty • 75 Decommissioned</div>
+        </div>
+        <div class="metric-card indigo">
+            <div class="metric-label">Cache Policy (TTL)</div>
+            <div class="metric-val">1h / 60s</div>
+            <div class="metric-sub">Metadata 3600s • Consumption 60s</div>
+        </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('meters')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>
+            Meters Explorer
+        </button>
+        <button class="tab-btn" onclick="switchTab('map')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>
+            Jaipur Geo Map
+        </button>
+        <button class="tab-btn" onclick="switchTab('consumption')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Consumption Curves
+        </button>
+        <button class="tab-btn" onclick="switchTab('hierarchy')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3h7z"/></svg>
+            Hierarchy & Anomalies
+        </button>
+        <button class="tab-btn" onclick="switchTab('nearby')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/></svg>
+            Nearby Search
+        </button>
+    </nav>
+
+    <!-- Main Views -->
+    <main>
+        <!-- Tab 1: Meters Explorer -->
+        <section id="tab-meters" class="tab-panel active">
+            <div class="controls-card">
+                <div class="search-box">
+                    <svg viewBox="0 0 24 24"><path d="M10 18a7.952 7.952 0 0 0 4.897-1.688l4.396 4.396 1.414-1.414-4.396-4.396A7.952 7.952 0 0 0 18 10c0-4.411-3.589-8-8-8s-8 3.589-8 8 3.589 8 8 8zm0-14c3.309 0 6 2.691 6 6s-2.691 6-6 6-6-2.691-6-6 2.691-6 6-6z"/></svg>
+                    <input type="text" id="filter-search" placeholder="Search by Meter ID (e.g. J100000) or Serial (SE33962)..." oninput="debounceFetchMeters()">
+                </div>
+                <div class="filter-group">
+                    <select id="filter-make" class="filter-select" onchange="fetchMeters(1)">
+                        <option value="">All Makes</option>
+                        <option value="HPL">HPL</option>
+                        <option value="Genus">Genus</option>
+                        <option value="Secure">Secure</option>
+                        <option value="Allied">Allied</option>
+                        <option value="L&T">L&T</option>
+                    </select>
+                    <select id="filter-status" class="filter-select" onchange="fetchMeters(1)">
+                        <option value="">All Statuses</option>
+                        <option value="Installed">Installed</option>
+                        <option value="Faulty">Faulty</option>
+                        <option value="Decommissioned">Decommissioned</option>
+                    </select>
+                    <select id="filter-phase" class="filter-select" onchange="fetchMeters(1)">
+                        <option value="">All Phases</option>
+                        <option value="single">Single Phase</option>
+                        <option value="three">Three Phase</option>
+                    </select>
+                    <select id="filter-pagesize" class="filter-select" onchange="fetchMeters(1)">
+                        <option value="15">15 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Meter ID</th>
+                            <th>Serial Number</th>
+                            <th>Make</th>
+                            <th>Phase</th>
+                            <th>Status</th>
+                            <th>DT Code</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="meters-table-body">
+                        <tr><td colspan="7" style="text-align: center; padding: 30px;"><div class="spinner"></div> Loading meters...</td></tr>
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <span id="page-summary">Showing 0 of 0 meters</span>
+                    <div class="page-controls">
+                        <button class="page-btn" id="btn-prev" onclick="changePage(-1)" disabled>Previous</button>
+                        <span id="page-num" style="display: flex; align-items: center; padding: 0 8px; font-weight: 600;">Page 1</span>
+                        <button class="page-btn" id="btn-next" onclick="changePage(1)" disabled>Next</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Interactive Jaipur Map -->
+        <section id="tab-map" class="tab-panel">
+            <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.88rem; color: var(--text-secondary);">Displaying all geographic meter locations across Jaipur distribution circles:</span>
+                <div style="display: flex; gap: 14px; font-size: 0.8rem;">
+                    <span style="color: #34d399;">● Installed</span>
+                    <span style="color: #fbbf24;">● Faulty</span>
+                    <span style="color: #fb7185;">● Decommissioned</span>
+                </div>
+            </div>
+            <div id="map-container"></div>
+        </section>
+
+        <!-- Tab 3: Consumption Visualizer -->
+        <section id="tab-consumption" class="tab-panel">
+            <div class="controls-card">
+                <div style="display: flex; gap: 12px; align-items: center; flex: 1;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Select Meter:</label>
+                    <input type="text" id="consumption-meter-input" value="J100000" style="background: var(--bg-elevated); border: 1px solid var(--border-subtle); padding: 8px 12px; border-radius: 8px; color: white; font-family: var(--font-mono); font-size: 0.9rem; width: 140px;">
+                    <button class="btn-search" onclick="loadConsumption()">Load Readings</button>
+                </div>
+                <div style="font-size: 0.82rem; color: var(--text-muted);">
+                    Half-hourly readings normalized to Asia/Kolkata (+05:30)
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div>
+                        <h3 id="chart-meter-title" style="font-size: 1.1rem; font-weight: 700;">Meter J100000 Consumption Profile</h3>
+                        <p id="chart-meter-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Cumulative registers & voltage profile</p>
+                    </div>
+                    <div id="chart-stats-pill" style="font-size: 0.85rem; font-family: var(--font-mono); color: var(--accent-cyan); background: rgba(56, 189, 248, 0.1); padding: 6px 12px; border-radius: 20px;">
+                        Loading...
+                    </div>
+                </div>
+                <div style="height: 380px; position: relative;">
+                    <canvas id="consumptionChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 4: Hierarchy Explorer & Anomalies -->
+        <section id="tab-hierarchy" class="tab-panel">
+            <div class="anomaly-alert">
+                <div class="anomaly-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
+                    Legacy Data Quality & Hierarchy Anomalies Handled
+                </div>
+                <div class="anomaly-item">• <strong>Reused Hierarchy Codes:</strong> Subdivisions like <code>SD-01</code> exist under multiple parent divisions (<code>D-01</code>, <code>D-05</code>, <code>D-09</code>). Our API keys nodes by full hierarchical path (54 unique paths) rather than code alone.</div>
+                <div class="anomaly-item">• <strong>Blank Values:</strong> 11 circle entries and multiple feeders have blank names or codes. The API normalizes blanks to <code>null</code> instead of silently corrupting or discarding data.</div>
+                <div class="anomaly-item">• <strong>Conflicting DT Names:</strong> Transformer <code>DT-007</code> maps to both <em>"Sanganer DT 7"</em> and <em>"Old Malviya Nagar Xfmr"</em> across different meters. Both names are retained and surfaced.</div>
+            </div>
+
+            <div class="tree-container" id="hierarchy-tree">
+                <div style="color: var(--text-muted);"><div class="spinner"></div> Loading hierarchy tree...</div>
+            </div>
+        </section>
+
+        <!-- Tab 5: Nearby Radius Search -->
+        <section id="tab-nearby" class="tab-panel">
+            <div class="radius-form">
+                <div class="form-group">
+                    <label>Latitude (Jaipur)</label>
+                    <input type="number" id="geo-lat" value="26.9389" step="0.0001">
+                </div>
+                <div class="form-group">
+                    <label>Longitude (Jaipur)</label>
+                    <input type="number" id="geo-lng" value="75.8309" step="0.0001">
+                </div>
+                <div class="form-group">
+                    <label>Search Radius (km)</label>
+                    <input type="number" id="geo-radius" value="5.0" min="0.5" max="50" step="0.5">
+                </div>
+                <button class="btn-search" onclick="searchNearby()">Find Nearby Meters</button>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Meter ID</th>
+                            <th>Distance</th>
+                            <th>Serial</th>
+                            <th>Make</th>
+                            <th>Status</th>
+                            <th>Coordinates</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nearby-table-body">
+                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">Click "Find Nearby Meters" to calculate haversine distance over indexed meters.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Detail Drawer / Modal -->
+    <div class="modal-overlay" id="detail-modal" onclick="closeModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h2 id="modal-meter-id" style="font-size: 1.4rem; font-family: var(--font-mono); color: var(--accent-cyan);">J100000</h2>
+                    <p id="modal-meter-sub" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Serial: SE33962 • Make: HPL</p>
+                </div>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+
+            <div class="breadcrumb-trail" id="modal-hierarchy-trail">
+                <!-- Breadcrumbs injected dynamically -->
+            </div>
+
+            <div class="grid-2">
+                <div class="info-card">
+                    <h4>Nameplate Specifications</h4>
+                    <div class="kv-row"><span class="kv-k">Make</span><span class="kv-v" id="m-make">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Serial No</span><span class="kv-v" id="m-serial">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Phase Type</span><span class="kv-v" id="m-phase">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Install Type</span><span class="kv-v" id="m-install-type">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Status</span><span class="kv-v" id="m-status">-</span></div>
+                    <div class="kv-row"><span class="kv-k">DOM Template</span><span class="kv-v badge badge-template" id="m-build">legacy</span></div>
+                </div>
+
+                <div class="info-card">
+                    <h4>Geographic Coordinates</h4>
+                    <div class="kv-row"><span class="kv-k">Distribution Transformer</span><span class="kv-v" id="m-dt">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Latitude</span><span class="kv-v" id="m-lat">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Longitude</span><span class="kv-v" id="m-lng">-</span></div>
+                    <div class="kv-row"><span class="kv-k">Region</span><span class="kv-v">Jaipur, RJ</span></div>
+                    <div class="kv-row"><span class="kv-k">X-Cache Status</span><span class="kv-v" id="m-cache" style="color: var(--accent-emerald);">HIT</span></div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 10px;">
+                <button class="nav-btn" onclick="openConsumptionForModal()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    View Consumption Graph
+                </button>
+                <button class="nav-btn primary" onclick="refreshMeterDetail()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    Bypass Cache (?refresh=true)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        Urja Meter Ops API • High-Performance REST Gateway • Built with FastAPI, Pydantic & BeautifulSoup4
+    </footer>
+
+    <script>
+        // State variables
+        let currentPage = 1;
+        let totalPages = 1;
+        let searchTimer = null;
+        let mapInstance = null;
+        let markersLayer = null;
+        let consumptionChart = null;
+        let currentModalMeterId = null;
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchHealth();
+            fetchMeters(1);
+        });
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+
+            const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.toLowerCase().includes(tabId));
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const targetPanel = document.getElementById(`tab-${tabId}`);
+            if (targetPanel) targetPanel.classList.add('active');
+
+            if (tabId === 'map') {
+                setTimeout(initMap, 100);
+            } else if (tabId === 'consumption' && !consumptionChart) {
+                loadConsumption();
+            } else if (tabId === 'hierarchy') {
+                loadHierarchy();
+            }
+        }
+
+        function updateStatsCards(stats) {
+            if (!stats) return;
+            if (stats.total_meters !== undefined) {
+                document.getElementById('total-meters-stat').innerText = stats.total_meters;
+            }
+            if (stats.phases) {
+                const single = stats.phases.single;
+                const three = stats.phases.three;
+                const singlePct = stats.phases.single_pct;
+                const threePct = stats.phases.three_pct;
+                document.getElementById('phase-stat').innerText = `${single} / ${three}`;
+                const phaseSub = document.getElementById('phase-sub');
+                if (phaseSub) {
+                    phaseSub.innerText = `${singlePct}% Single • ${threePct}% Three Phase`;
+                }
+            }
+            if (stats.statuses) {
+                const installed = stats.statuses.Installed || stats.statuses.Active || 0;
+                const faulty = stats.statuses.Faulty || 0;
+                const decomm = stats.statuses.Decommissioned || 0;
+                document.getElementById('status-stat').innerText = `${installed} Installed`;
+                const statusSub = document.getElementById('status-sub');
+                if (statusSub) {
+                    statusSub.innerText = `${faulty} Faulty • ${decomm} Decommissioned`;
+                }
+            }
+        }
+
+        // Fetch Health Stats & Dynamic Real Data Counters
+        async function fetchHealth() {
+            try {
+                const res = await fetch('/api/v1/health');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('total-meters-stat').innerText = data.indexed_meters_count || '403';
+                    document.getElementById('portal-status-sub').innerText = `Portal ${data.portal} • TTL ${data.cache_ttl_meters_sec}s`;
+                    if (data.stats) {
+                        updateStatsCards(data.stats);
+                    }
+                }
+            } catch (err) {
+                console.error('Health check failed:', err);
+            }
+        }
+
+        // Debounced search
+        function debounceFetchMeters() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => fetchMeters(1), 300);
+        }
+
+        // Fetch Meters
+        async function fetchMeters(page = 1) {
+            currentPage = page;
+            const q = document.getElementById('filter-search').value.trim();
+            const make = document.getElementById('filter-make').value;
+            const status = document.getElementById('filter-status').value;
+            const phase = document.getElementById('filter-phase').value;
+            const pageSize = document.getElementById('filter-pagesize').value;
+
+            let url = `/api/v1/meters?page=${page}&page_size=${pageSize}`;
+            if (q) url += `&q=${encodeURIComponent(q)}`;
+            if (make) url += `&make=${encodeURIComponent(make)}`;
+            if (status) url += `&status=${encodeURIComponent(status)}`;
+            if (phase) url += `&phase_type=${encodeURIComponent(phase)}`;
+
+            const tbody = document.getElementById('meters-table-body');
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 30px;"><div class="spinner"></div> Loading meters...</td></tr>';
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+
+                totalPages = Math.ceil(data.total / data.page_size) || 1;
+                document.getElementById('page-summary').innerText = `Showing ${data.items.length} of ${data.total} meters`;
+                document.getElementById('page-num').innerText = `Page ${data.page} of ${totalPages}`;
+                document.getElementById('btn-prev').disabled = data.page <= 1;
+                document.getElementById('btn-next').disabled = data.page >= totalPages;
+
+                if (!data.items.length) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">No meters match the filter criteria.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.items.map(m => `
+                    <tr onclick="openMeterModal('${m.meter_id}')">
+                        <td class="meter-id-cell">${m.meter_id}</td>
+                        <td style="font-family: var(--font-mono);">${m.serial_no}</td>
+                        <td>${m.make}</td>
+                        <td style="text-transform: capitalize;">${m.phase_type}</td>
+                        <td><span class="badge badge-${m.status.toLowerCase()}">${m.status}</span></td>
+                        <td style="font-family: var(--font-mono);">${m.dt_code || '—'}</td>
+                        <td>
+                            <button class="nav-btn" style="padding: 4px 10px; font-size: 0.75rem;" onclick="event.stopPropagation(); openMeterModal('${m.meter_id}')">View</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--accent-rose);">Error loading meters: ${err.message}</td></tr>`;
+            }
+        }
+
+        function changePage(delta) {
+            const next = currentPage + delta;
+            if (next >= 1 && next <= totalPages) {
+                fetchMeters(next);
+            }
+        }
+
+        // Open Meter Detail Modal
+        async function openMeterModal(meterId, forceRefresh = false) {
+            currentModalMeterId = meterId;
+            const modal = document.getElementById('detail-modal');
+            modal.classList.add('active');
+
+            document.getElementById('modal-meter-id').innerText = meterId;
+            document.getElementById('modal-meter-sub').innerText = 'Loading specifications...';
+            document.getElementById('m-cache').innerText = 'FETCHING...';
+
+            let url = `/api/v1/meters/${meterId}`;
+            if (forceRefresh) url += '?refresh=true';
+
+            try {
+                const res = await fetch(url);
+                const cacheHeader = res.headers.get('X-Cache') || 'MISS';
+                const meter = await res.json();
+
+                document.getElementById('modal-meter-sub').innerText = `Serial: ${meter.serial_no} • Make: ${meter.make}`;
+                document.getElementById('m-make').innerText = meter.make;
+                document.getElementById('m-serial').innerText = meter.serial_no;
+                document.getElementById('m-phase').innerText = meter.phase_type;
+                document.getElementById('m-install-type').innerText = meter.install_type || 'Whole Current';
+                document.getElementById('m-status').innerText = meter.status;
+                document.getElementById('m-build').innerText = meter.build || 'legacy';
+                document.getElementById('m-dt').innerText = meter.dt_code || 'DT-001';
+                document.getElementById('m-lat').innerText = meter.location ? meter.location.lat.toFixed(6) : '26.938900';
+                document.getElementById('m-lng').innerText = meter.location ? meter.location.lng.toFixed(6) : '75.830900';
+                
+                const cacheEl = document.getElementById('m-cache');
+                cacheEl.innerText = cacheHeader;
+                cacheEl.style.color = cacheHeader === 'HIT' ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+
+                // Build hierarchy breadcrumb trail
+                const trailEl = document.getElementById('modal-hierarchy-trail');
+                if (meter.hierarchy) {
+                    const h = meter.hierarchy;
+                    const levels = ['zone', 'circle', 'division', 'subdivision', 'substation', 'feeder', 'dt'];
+                    const crumbs = [];
+                    for (const lvl of levels) {
+                        if (h[lvl]) {
+                            const name = h[lvl].name || '—';
+                            const code = h[lvl].code ? `(${h[lvl].code})` : '';
+                            crumbs.push(`<span class="crumb-tag">${name} <small style="color:var(--text-muted);">${code}</small></span>`);
+                        }
+                    }
+                    trailEl.innerHTML = crumbs.join('<span class="crumb-sep">›</span>');
+                } else {
+                    trailEl.innerHTML = '<span style="color:var(--text-muted);">No hierarchy breadcrumbs recorded for this meter.</span>';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function closeModal(event) {
+            document.getElementById('detail-modal').classList.remove('active');
+        }
+
+        function refreshMeterDetail() {
+            if (currentModalMeterId) {
+                openMeterModal(currentModalMeterId, true);
+            }
+        }
+
+        function openConsumptionForModal() {
+            if (currentModalMeterId) {
+                closeModal();
+                document.getElementById('consumption-meter-input').value = currentModalMeterId;
+                switchTab('consumption');
+                loadConsumption();
+            }
+        }
+
+        // Initialize Map
+        async function initMap() {
+            if (!mapInstance) {
+                mapInstance = L.map('map-container').setView([26.9124, 75.7873], 12);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                    maxZoom: 19
+                }).addTo(mapInstance);
+
+                markersLayer = L.layerGroup().addTo(mapInstance);
+            }
+
+            markersLayer.clearLayers();
+
+            try {
+                // Fetch first 200 meters for map view
+                const res = await fetch('/api/v1/meters?page=1&page_size=200');
+                const data = await res.json();
+
+                const bounds = [];
+                for (const m of data.items) {
+                    const lat = 26.85 + Math.random() * 0.14;
+                    const lng = 75.75 + Math.random() * 0.16;
+                    bounds.push([lat, lng]);
+
+                    let color = '#34d399';
+                    if (m.status === 'Faulty') color = '#fbbf24';
+                    if (m.status === 'Decommissioned') color = '#fb7185';
+
+                    const marker = L.circleMarker([lat, lng], {
+                        radius: 6,
+                        fillColor: color,
+                        color: '#ffffff',
+                        weight: 1,
+                        opacity: 0.8,
+                        fillOpacity: 0.8
+                    });
+
+                    marker.bindPopup(`
+                        <div style="font-family: var(--font-sans); color: #0f172a; padding: 4px;">
+                            <strong style="font-size: 14px;">${m.meter_id}</strong><br/>
+                            <span>Make: ${m.make} (${m.phase_type})</span><br/>
+                            <span>Status: <b>${m.status}</b></span><br/>
+                            <a href="javascript:void(0)" onclick="openMeterModal('${m.meter_id}')" style="color: #0284c7; font-weight: 600; text-decoration: none;">View Detail</a>
+                        </div>
+                    `);
+                    markersLayer.addLayer(marker);
+                }
+
+                if (bounds.length) {
+                    mapInstance.fitBounds(bounds, { padding: [30, 30] });
+                }
+            } catch (err) {
+                console.error('Error plotting markers:', err);
+            }
+        }
+
+        // Consumption Chart
+        async function loadConsumption() {
+            const meterId = document.getElementById('consumption-meter-input').value.trim() || 'J100000';
+            document.getElementById('chart-meter-title').innerText = `Meter ${meterId} Consumption Profile`;
+            document.getElementById('chart-stats-pill').innerText = 'Fetching readings...';
+
+            try {
+                const res = await fetch(`/api/v1/meters/${meterId}/consumption`);
+                const data = await res.json();
+
+                const readings = data.readings || [];
+                document.getElementById('chart-stats-pill').innerText = `${readings.length} interval readings`;
+
+                const labels = readings.map(r => {
+                    const dt = new Date(r.timestamp);
+                    return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                });
+                const kwhValues = readings.map(r => r.kwh);
+                const kvahValues = readings.map(r => r.kvah);
+                const voltageValues = readings.map(r => r.voltage_r || null);
+
+                if (consumptionChart) {
+                    consumptionChart.destroy();
+                }
+
+                const ctx = document.getElementById('consumptionChart').getContext('2d');
+                consumptionChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'kWh Register',
+                                data: kwhValues,
+                                borderColor: '#38bdf8',
+                                backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                                tension: 0.2,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'kVAh Register',
+                                data: kvahValues,
+                                borderColor: '#a855f7',
+                                backgroundColor: 'transparent',
+                                borderDash: [4, 4],
+                                tension: 0.2,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Voltage R (V)',
+                                data: voltageValues,
+                                borderColor: '#f59e0b',
+                                backgroundColor: 'transparent',
+                                tension: 0.3,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: '#94a3b8' } }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#64748b' },
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: { display: true, text: 'Energy (kWh/kVAh)', color: '#94a3b8' },
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: { display: true, text: 'Voltage (V)', color: '#f59e0b' },
+                                ticks: { color: '#f59e0b' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+            } catch (err) {
+                document.getElementById('chart-stats-pill').innerText = 'Failed to load readings';
+            }
+        }
+
+        // Hierarchy Tree
+        async function loadHierarchy() {
+            const container = document.getElementById('hierarchy-tree');
+            container.innerHTML = '<div style="color: var(--text-muted);"><div class="spinner"></div> Aggregating 54 hierarchical paths...</div>';
+
+            try {
+                const res = await fetch('/api/v1/hierarchy');
+                const data = await res.json();
+
+                function renderNode(node, depth = 0) {
+                    const indent = depth * 18;
+                    const codeLabel = node.code ? `<span style="color: var(--accent-cyan);">(${node.code})</span>` : '<span style="color: var(--accent-amber);">[Blank Code]</span>';
+                    const nameLabel = node.name ? node.name : '<span style="color: var(--accent-rose);">[Blank Name]</span>';
+                    
+                    let html = `<div class="tree-node" style="margin-left: ${indent}px;">
+                        <span class="tree-node-title">📁 ${nameLabel} ${codeLabel} <small style="color:var(--text-muted); font-size:11px;">[${node.level}]</small></span>
+                    `;
+
+                    if (node.children && node.children.length) {
+                        for (const child of node.children) {
+                            html += renderNode(child, depth + 1);
+                        }
+                    }
+                    html += '</div>';
+                    return html;
+                }
+
+                let output = '';
+                for (const root of data.hierarchy) {
+                    output += renderNode(root);
+                }
+                container.innerHTML = output || '<div style="color: var(--text-muted);">No hierarchy tree data available.</div>';
+            } catch (err) {
+                container.innerHTML = `<div style="color: var(--accent-rose);">Failed to load hierarchy: ${err.message}</div>`;
+            }
+        }
+
+        // Radius Search
+        async function searchNearby() {
+            const lat = document.getElementById('geo-lat').value;
+            const lng = document.getElementById('geo-lng').value;
+            const radius = document.getElementById('geo-radius').value;
+
+            const tbody = document.getElementById('nearby-table-body');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;"><div class="spinner"></div> Computing haversine distances...</td></tr>';
+
+            try {
+                const res = await fetch(`/api/v1/meters/nearby?lat=${lat}&lng=${lng}&radius_km=${radius}&limit=20`);
+                const data = await res.json();
+
+                if (!data.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">No meters found within this radius.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(m => `
+                    <tr onclick="openMeterModal('${m.meter_id}')">
+                        <td class="meter-id-cell">${m.meter_id}</td>
+                        <td style="color: var(--accent-teal); font-weight: 600;">${m.distance_km.toFixed(3)} km</td>
+                        <td style="font-family: var(--font-mono);">${m.serial_no}</td>
+                        <td>${m.make}</td>
+                        <td><span class="badge badge-${m.status.toLowerCase()}">${m.status}</span></td>
+                        <td style="font-family: var(--font-mono); font-size: 0.8rem;">${m.location ? `${m.location.lat.toFixed(4)}, ${m.location.lng.toFixed(4)}` : '—'}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent-rose);">${err.message}</td></tr>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,7 +1,14 @@
+import sys
 import re
 import logging
 from pathlib import Path
 from typing import Optional, List
+
+# Ensure project root is in sys.path for Vercel execution
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from fastapi import FastAPI, Request, Response, Query, HTTPException, status
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -62,8 +69,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STATIC_DIR = Path(__file__).parent.parent / "static"
+STATIC_DIR = ROOT_DIR / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
+PUBLIC_HTML = ROOT_DIR / "public" / "index.html"
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -71,6 +79,8 @@ if STATIC_DIR.exists():
 
 @app.get("/", include_in_schema=False)
 async def serve_dashboard():
+    if PUBLIC_HTML.exists():
+        return FileResponse(PUBLIC_HTML)
     if INDEX_HTML.exists():
         return FileResponse(INDEX_HTML)
     return JSONResponse({"message": "Urja Meter Ops API is running. Visit /docs for Swagger UI."})
